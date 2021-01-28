@@ -1,0 +1,86 @@
+\documentclass[paper=a4, parskip=half-]{scrartcl}
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{marvosym} % for the \Lightning symbol
+\usepackage{amssymb} % more icons/symbols
+\usepackage{tablefootnote} % for footnotes in tables
+% not in standard texlive, can't be asked to figure it out now
+%\usepackage{ccicons} % creative commons icon
+\usepackage{hyperref} % for hyper links
+\usepackage[dvipsnames]{xcolor} % to color stuff -- dvipnames for additional color names
+\usepackage[shortlabels]{enumitem} % to modify enumeration labels
+\usepackage{tcolorbox} % for colored boxes - see https://tex.stackexchange.com/questions/66154/how-to-construct-a-coloured-box-with-rounded-corners/172608#172608
+\usepackage{tikz} % drawing stuff
+\usepackage{eurosym} % € (no, default LaTeX font doesn't include it)
+\usepackage{natbib}
+\usepackage{graphicx}
+
+\usepackage{listings}
+
+\usepackage{geometry}
+ \geometry{
+ a4paper,
+ left=20mm,
+ right=20mm,
+ top=20mm,
+ bottom=30mm,
+ }
+
+
+\title{Advanced Topics of Communication Systems}
+\author{\texttt{\{wnicole\}@ethz.ch}}
+\date{ETH Zürich, HS 2020}
+
+% Custom commands
+\newcommand{\setzeroone}{\lbrace 0, 1 \rbrace} % => {0,1} (Notice the missing $$)
+\newcommand{\horizontaldivider}{\begin{center} \line(1,0){350} \end{center}}
+
+\begin{document}
+
+\begin{titlepage}
+\maketitle
+\vspace{5cm}
+\thispagestyle{empty}
+
+
+\begin{abstract}
+This is a summary for the course \textit{Advanced Topics of Communication Systems} at ETH Zürich.
+
+I do not guarantee correctness or completeness, nor is this document endorsed by the lecturers.
+Feel free to point out any erratas. This summary was written in a very short time frame and might not be the most structured.
+\end{abstract}
+
+\end{titlepage}
+
+\tableofcontents
+%\listoffigures
+%\listoftables
+\newpage
+
+\input{1-te}
+\newpage
+
+\input{2-qos}
+\newpage
+
+\input{3-vpn}
+\newpage
+
+\input{4-conv}
+\newpage
+
+\input{5-multi}
+\newpage
+
+\input{6-p4}
+\newpage
+
+\input{7-frr}
+\newpage
+
+\input{8-exercises}
+\newpage
+
+\end{document}

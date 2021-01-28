@@ -1,0 +1,73 @@
+\section{Exercises}
+
+%TODO: include examples?
+
+\subsection{Tutorials}
+
+\subsubsection{Reflector and Repeater}
+
+The reflector sends the packet back to where it came from (swap MAC and set egress port to ingress port) and the repeater sends a packet to the port where the packet did not arrive on (match exact on ingress port, forward based on matched table entry - P1 to P2 and vice versa).
+
+Solution omitted.
+
+\subsubsection{L2 Fun}
+
+First, we do simple L2 forwarding where we match the destination MAC address to a specified egress port.
+
+Then, we do L2 broadcasting. If the destination MAC address is \texttt{FF:FF:FF:FF:FF:FF}, a switch sends a packet to all the ports the packet did not come from. For this multicast to work, the packet needs to be replicated and send to a multicast group. With four ports, we need four different multicast groups so that we don't send the packet back to the ingress port when broadcasting. First, define four multicast nodes with their replication ID (first number) as follows (CLI):
+
+\begin{lstlisting}
+mc_node_create 0 2 3 4
+mc_node_create 1 1 3 4
+mc_node_create 2 1 2 4
+mc_node_create 3 1 2 3
+\end{lstlisting}
+
+Then, associate each multicast node with a multicast group:
+
+\begin{lstlisting}
+mc_mgrp_create 1
+mc_node_associate 1 0
+
+mc_mgrp_create 2
+mc_node_associate 2 1
+
+mc_mgrp_create 3
+mc_node_associate 3 2
+
+mc_mgrp_create 4
+mc_node_associate 4 3
+\end{lstlisting}
+
+In the P4 program, we define two tables: one to map a multicast group to an ingress port (e.g. ingress port 1 is mapped to group 1 since it excludes port 1) in case of a broadcast (this automatically forwards the packet correctly with \texttt{standard\_metadata.mcast\_grp = mcast\_grp;}) and one to simply forward to the right port in case of unicast (match on destination MAC address).
+
+In the third exercise, we %TODO: digest and copy exercise
+
+
+\subsubsection{Basic Load Balancing}
+
+
+
+\subsubsection{Probabilistic Data Structures}
+
+\subsubsection{L3 Fun}
+
+\subsubsection{Congestion Aware Load Balancing}
+
+\subsubsection{Packet Loss Detection}
+
+
+
+\subsection{MPLS}
+
+\subsection{RSVP}
+
+\subsection{Load Balancing}
+
+\subsection{Traffic Control}
+
+\subsection{MPLS VPN and VRF}
+
+\subsection{Fast Reroute}
+
+\subsection{IP Multicast}
