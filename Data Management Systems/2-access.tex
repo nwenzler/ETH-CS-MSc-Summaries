@@ -1,0 +1,272 @@
+\section{Access Methods}
+
+\subsection{Introduction}
+
+We are now looking at layer 3 and 4 in Figure \ref{fig:arch}. We know now how data is brought from storage to memory - in this section we focus on how it is represented and organized in memory (how tuples are arranged within blocks and indexes), which impacts processing speed and hardware features that can be used.
+
+\paragraph{Workload}
+A DB system and its access methods can be constructed to handle a certain kind of workload (on-line transaction / analytic processing = OLT/AP). The type of workload also influences the choice of hardware. We have:
+\begin{itemize}
+    \item \textbf{Transactional (OLTP):} Workload is dominated by (large amount of) short transactions with updates and modifications (high I/O), usually point queries (targeting one tuple), sensitive to contention, needs lots of processing power. Fits the traditional design of a relational engine.
+    \item \textbf{Analytical (OLAP):} Workload is dominated by complex queries combining many tables, usually only read queries, needs large amount of memory and processing power. Usually uses a data warehouse system.
+\end{itemize}
+
+\paragraph{Trade-Offs}
+Trade-offs made in a DB design can include:
+\begin{itemize}
+    \item More compact representations vs. more complex processing.
+    \item More indexes vs. more space and less maintenance cost.
+    \item Row store for OLTP vs. column store for OLAP.
+    \item The amount of unused space to keep for updates / movements.
+    \item etc.
+\end{itemize}
+
+
+\subsection{Pages and Blocks}
+
+Some of the information in this section was already discussed in previous sections.
+
+In the previous section we have seen that data in a DB is stored in blocks, which are part of extents, which in turn are part of segments. There are different notions for a page:
+
+\begin{itemize}
+    \item \textbf{Hardware Pages:} The atomic unit to write to storage, usually 4KB.
+    \item \textbf{OS Page:} The unit used by the OS to implement virtual memory, usually 4KB.
+    \item \textbf{DB Page:} Equivalent to a block, anywhere between 512B and 32KB. Trend is towards larger block sizes since they incur less overhead (less keeping track).
+\end{itemize}
+
+\paragraph{Finding a Block}
+Each segment has a segment header which contains a (linked) list of used and free blocks. Both lists keep track of block IDs (Extent, Offset) while the free list also keeps track of the available space. This system is a potential bottleneck, especially for modification transactions.
+
+\textbf{Improving Performance:} Using several free lists for faster concurrent transactions, making the traversal of the free list fast (sorting by size, keep it short, etc.), efficient search for holes in all blocks, etc.
+
+\paragraph{Finding a Tuple / Record}
+Each block, next to a block header, maintains a list of pointers (offsets) to all the slots in it that store a tuple each. Each tuple has an ID (Block ID, Offset). The slots / tuples are not uniform in size (hence the offsets).
+
+\textbf{Changes:} Too large for the slot - keep a new pointer in original position to new location of tuple (can be in a different block, ID stays the same). Deletion - remove pointer. Smaller - just leave space empty. Insertion - use a block with enough free space (compact it if needed).
+
+\paragraph{Tuple / Record Structure}
+A tuple contains a header (validity flags for deletion, visibility info for concurrency control, bit map of null values, etc.) and attributes (data / pointer to data for each non-null attribute) as seen in Figure \ref{fig:tuple}. A relational DB does \textbf{not} store schema information (table name, data types of attributes, number of attributes, etc.) in a tuple - this is in contrast to schema-less systems (see later). %TODO more on this? where is schema info stored in a rel. DB? %TODO tuple ID != key
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.6]{images/2-tuple.PNG}
+	\caption{Tuple representation in memory (header omitted - usually in front of data).}
+	\label{fig:tuple}
+\end{figure}
+
+\paragraph{Record Layout Optimizations}
+The serial representation as seen in Figure \ref{fig:tuple} is intuitive but has a linear time to access each attribute. To improve the access time, we can either have a fixed sized part at the beginning of a tuple that stores offsets instead of lengths with each pointer pointing to the tail of an attribute (constant access time for each attribute or simply reorder the attributes such that variable length data (e.g. strings) is placed at the end (again with the pointer system from above). %TODO: how is this constant access if we first have to find out which offset we need?
+
+\paragraph{Data Types}
+\begin{itemize}
+    \item \textbf{Integer Numbers:} %TODO how representation, similar to C
+    \item \textbf{Real Numbers:} IEEE-754 standard for variable precision or fixed point representations for fixed precision (avoids rounding errors). %TODO
+    \item \textbf{Strings and BLOBS (Binary Large Objects):} Length and data.
+    \item \textbf{Time, Coordinates, Points, etc.:} System specific.
+\end{itemize}
+
+When a tuple / single attribute is very big (usually in reference to block size), instead of storing the whole thing one can store the fixed part of it and a pointer to the variable part (potentially in a different block or even a DB-external file). Since it is common that those attributes are not processed by queries, putting them somewhere else speeds up scanning operations. This is usually the case for BLOBS (e.g. pictures, text, etc.).
+
+\paragraph{Row Store}
+Tuples are stored as described so far with all the attributes staying together (just as seen as in a table). Allows for quick access and retrieval of an entire tuple. Is usually used in OLTP systems where operations are mostly carried out on individual tuples. When only retrieving a single attribute, a lot of unnecessary data is scanned and brought into the cache since we carry entire blocks.
+
+\paragraph{Column Store}
+The data is stored by columns, i.e. each block contains columns instead of rows of a table. Usually used on OLAP / in-memory DBs. Each column either has virtual IDs (order = ID, as in row store, safes space) or explicit IDs which are repeated for each column s.t. each column can be treated individually and (relative) order does not matter. Uses the cache very efficiently. Easy to compress. Improves bandwidth. Disadvantages: When an entire tuple is needed, we need to access several blocks. Complex if a tuple needs to be reconstructed as an intermediate / final result. Modifications are more difficult.
+
+\textbf{Vectorized Processing / SIMD:} Simultaneously performing an operation on a vector of values. Column store is the perfect data representation for this. Very useful for numeric values and bit comparisons.
+
+\paragraph{Partition Attributes Across (PAX)}
+An alternative tuple representation as seen in Figure \ref{fig:pax}. A block is divided into mini-blocks and contains several tuples but is organized as a column store. Reconstructing the tuple does not require access to several blocks. See papers (below) for more info.
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.8]{images/2-pax.PNG}
+	\caption{Row store (NSM) vs. PAX representation.}
+	\label{fig:pax}
+\end{figure}
+
+\paragraph{Compression}
+Not used to save space but rather to save bandwidth. There is a trade-off between the CPU cycles needed to (de)compress and the memory bandwidth (today: former wins, CPU much faster than memory). There is a possibility to process data in its compressed form. There are many different compression mechanisms and they depend on the data organization (dictionary, run length encoding, delta encoding, bitmaps, etc.).
+
+\paragraph{Dictionary Compression}
+Rather an encoding than actual compression. Build a dictionary that maps long entries to, for example, integers / small numbers when the data is loaded. This can be applied to any finite collection of names (e.g. countries, departments, etc.). The data can be easily processed in its encoded form. A hash function is one way to implement a dictionary encoding.
+
+\paragraph{Frame of Reference}
+Many attributes have value locality and can be represented as a delta over some base (e.g. 1007, 1017, 1090 represented as 1000, 7, 17 and 90). This allows for operations on compressed data. Can be combined with delta encoding for sorted lists of data (store difference to previous value rather than actual value).
+
+\paragraph{Run Length Encoding}
+If a value repeats, store it once and how many time it appears. Useful for attributes with low cardinality (e.g. departments). Often used in column store. For row store it is used for long strings with repeated characters. Compresses the data significantly but processing is more complex. The encoding is variable in size.
+
+\paragraph{Bit-Vector Representation / Bitmap}
+For every value that an attribute may take, construct the bitmap as follows: create array as long as number of tuples, if tuple i has value x for that attribute, position i in the bitmap x is set to 1. Bitmaps act as an index and can be used to process queries just by looking at it (selections, joins on an attribute, group by on attribute, etc.). Can be further compressed using run length encoding - but processing becomes more complex.
+
+
+\subsection{Indexing}
+
+An index is a data structure that improves the speed (sub-linear time) of data retrieval operations (random and sequential) on a database table at the cost of additional writes and storage space (as in B+ Trees) - or processing power (as in hashing) - to maintain the index data structure.
+
+An index can also be used to police database constraints when data is inserted / updated (i.e. unique, exclusion, primary / foreign key).
+
+
+\subsubsection{Hashing}
+
+Hashing can be used to construct an index but also as a partitioning strategy when allocating data.
+
+\paragraph{Hash Function}
+A function applied to some kind of arbitrary sized value (e.g. a single attribute value of a table) resulting in a fixed-size hash value. A hash value is usually much smaller than the original value. Different values might result in the same hash value since they are fixed in size (= collision).
+
+There are many functions with strong properties but in a DB the function has to be computationally cheap (usually a modulo operation) since it is used very often.
+
+\paragraph{Hash Table}
+A structure that maps keys (usually primary key) to values. It uses a hash function to compute an index for an array of buckets / slots (in DB: bucket = typically a block) that contain the desired values. To look up a desired value, the key is hashed and the location of it is found with the resulting index. This only works for point queries.
+
+Collisions do not happen with perfect hash functions but the table needs to be as big as the cardinality of the attributes (e.g. 4 byte keys = 4 GB table). But if the table is too small, we have too many collisions. Growing the hash table is an expensive operation. Choosing the perfect size is key.
+
+\paragraph{Dealing with Collisions}
+Since a bucket in a DB is usually a block and not a single tuple, i.e. colliding values might simply belong to the same block, we have less "bad" collisions - this usually means that we ran into a block that is full and we to allocate a new one. Ways to deal with such collisions include:
+
+\begin{itemize}
+    \item \textbf{Chaining:} Add a block with free space to the linked list pointed to by a hash bucket. Not optimal because locating the desired tuple is now more complex (especially if the linked list is long). Improve efficiency by already adding free blocks to a linked list before collision even occurs.
+    \item \textbf{Open Addressing:} Look for an empty slot in the hash table using some rule. Linear probing: simply add tuple to the block with index = index + 1. Cuckoo hashing: use several hash functions, if the first one leads to a collision use the next one and so on.
+\end{itemize}
+
+\paragraph{Growing the Hash Table}
+This needs to be done when the hash table is completely full. A basic approach would be to create a new, larger hash table with more buckets (typically 2x) and rehash all the existing tuples. Very expensive and inefficient, lots of random accesses and cannot be done on disk (where hash indices are mostly used). Other approaches are often used in combination or in a nested manner (bucket directory pointing to another hash table pointing to actual data - helps with skew).
+
+\textbf{Extendible Hashing:} Instead of having each hash value uniquely identify its own bucket, several hash values point to the same bucket and therefore the same block. If a block fills up, split it and move entries as needed. This increases the available space without significantly changing the hashing mechanism but it requires two page lookups (bucket directory and data block). To allow for more splitting (higher degree of sharing), the size of the table / bucket directory can be doubled by adding another bit to the matching value which increases the number of buckets = logical doubling. %TODO better?
+
+\textbf{Linear Hashing:} A split pointer is used to indicate which bucket will be split in case of overflow (which is not necessarily the one that actually overflows - this one is simply chained) or other triggers (load factor, max. chain length, etc.). The entries targeted by the split bucket use a second hash function targeting the expanded range (mod n, mod 2n). After splitting, move the pointer to the next block. With this, the size of the hash table is gradually increased while redistributing the table (pointer hitting a chained block). The directory grows page by page instead of doubling. Once all buckets have been split, start anew. %TODO better
+
+
+\subsubsection{B+ Trees}
+
+B+ Trees are used to create an index by trading in space. No matter what is said, a DB always uses B+ Trees, never simply B-Trees.
+
+\paragraph{B-Tree}
+Self-balancing tree that maintains sorted data and allows for searches, sequential access, insertions and deletions in logarithmic time. It requires linear space. It is a generalization of a binary tree since it allows for more than two children per node.
+
+\begin{itemize}
+    \item Order = $m$.
+    \item Every node has at most $m$ children.
+    \item Every non-leaf node except root has at least $\frac{m}{2}$ (round up) children.
+    \item If it is not a leaf, the root has at least two children.
+    \item A non-leaf node with $k$ children contains $k-1$ keys.
+    \item All leaves appear in the same level and carry no information.
+\end{itemize}
+
+%TODO good example
+
+\paragraph{B+ Tree}
+Is a B-Tree where the data is at the leaves only (usually pointers to the tuples being indexed or more uncommonly the actual tuple). The leaf nodes are organized as a linked list. The values in the same leaf block might point to different data blocks.
+
+Indices are referred by segments and they can use different block sizes (= nodes) than actual data blocks. Furthermore, an index can have its own memory buffer to avoid working on the index affecting working on data.
+
+%TODO good example
+
+\paragraph{Clustered Index}
+Forces the tuples of a table to be stored in the same order as the B+ Tree index indicates. With this, the table is physically stored in a sorted manner. An index might be defined over one or a combination of attributes (composite key). In the latter case, it is not possible to access the index with a subset of the attributes it is defined on. Typically done only for the primary key and automatic in systems that store the data directly in the leaf nodes. Most useful for tables that are not updated frequently.
+
+A composite key is compared lexicographically: %TODO more? example p. 23
+
+$$
+(a1,b1) < (a2,b2) \Longleftrightarrow (a1 < b1) \lor (a1 = b2 \land a2 < b2)
+$$
+
+\paragraph{Non-Unique Values}
+A B+ Tree index can be built on any attribute including those that are not unique. To differentiate duplicates, we can either repeat the key at the leaf nodes for every duplicate entry or store the key once and let it point to a linked list of all the matching entries. If the data is stored directly in the leaves, append the tuple ID to differentiate tuples the entries are referring to. %TODO what does this look like exactly
+
+\paragraph{Direct Lookup}
+To find a single tuple, traverse the tree starting from the root. Within each node, use binary search to look for the correct entry. At the leaf node: return the corresponding pointer / position.
+
+\paragraph{Range Lookup}
+To find tuples that are in a particular range, start by finding the leaf node corresponding to the first value and then follow the linked list until we hit the second value.
+
+\paragraph{Insertion}
+Lookup the corresponding leaf. If there is space, insert. If there is no space, split leaf into two, insert item and insert new separator on parent node. If parent node is full, split it in two and insert separator in parent's parent node. Go all the way to the root if necessary. %TODO example
+
+\paragraph{Deletion}
+Lookup the corresponding leaf and remove entry. If the leaf is less than half order full, check a neighboring leaf. If it is more than half full, balance both. If it is half full, merge both. Update separator(s) in parent. %TODO example
+
+\paragraph{Concurrent Access}
+Use lock coupling to protect index from conflicting concurrent accesses. When accessing the index, first lock the root and the first level. Check where you have to go and only then release first lock on root. Lock second level and repeat up to the leaf level. %TODO lock on entire level or on one node of level? %TODO more, splitting p.29/30
+
+\paragraph{Creating a B+ Tree Index}
+A B+ Tree is created bottom up (leaves first):
+
+\begin{itemize}
+    \item Sort the data
+    \item Fill blocks one after another (leave space if updates are anticipated else we have a clustered and compact tree)
+    \item Remember largest value in each block
+    \item Create inner nodes by using largest value in each block as separator
+    \item Iterate upwards to the next level until there is only a single block (root)
+\end{itemize}
+
+\paragraph{Optimizations}
+\begin{itemize}
+    \item \textbf{Reverse Index:} If the indexed attribute is a sequence and new items are constantly produced, insert items by reversing them so that they are more likely to go to different blocks. This protects from concurrent updates fighting to insert on the same block.
+    \item \textbf{More Efficient Keys:} Replace keys in inner nodes with shorter separators that have the same effect or factor the children's common prefix. %TODO insert images
+    \item \textbf{Ignore Rules:} Don't merge nodes when they do not have enough data - delaying a merge can minimize changes. Periodically rebuild the tree instead. Also: using variable length keys might improve efficiency, but it is more complex. %TODO
+    \item Wide / shallow trees are good for slow storage devices (large nodes, potentially over several sequential blocks) and deep trees are good for fast storage devices (small nodes, potentially several for one block).
+\end{itemize}
+
+
+\subsubsection{Other Indexing Techniques}
+
+\paragraph{Query Selectivity}
+Selectivity refers to the number of tuples returned by the query. A highly selective query returns very few tuples as a result (vs. low selectivity). The indices discussed above work well for queries with high selectivity.
+
+For low selectivity, a table scan might be a good index. %TODO?
+
+\paragraph{Bitmaps}
+Simple predicate selections can be very efficient using bitmaps by intersecting them for every queried column. Since bitmaps are usually sparse, they can be compressed pretty well (with run length encoding) and they are often used for large tables in OLAP - faster than other indices for low selectivity queries. Especially useful for data types where comparison is expensive. %TODO example
+
+\paragraph{Materialized Aggregates}
+For groups of data that don't change very often, one can compute and store some basic statistics = aggregates (sum, avg, count, min, max, etc.). These can be used as small indices to check whether the data needed is within that group. They can also be used to compute aggregates over the whole table without having to read all of it. %TODO i mean you kinda need to no?
+
+\paragraph{Specialized Indices}
+Text: tries, patricia trees, inverted indices (map words to documents). Spatial: r-trees, grid file. ETC %TODO
+
+
+\subsection{Access Methods in Context}
+
+Alternative designs for representing data in memory.
+
+\paragraph{Denormalized Tables}
+Usually, normal forms (rules) are used to eliminate redundancy in a DB schema by forcing table splits until each different table represents a distinct concept. This saves space but it is common that the split tables will be joined again in almost every query. Denormalized tables allow for more than one table to be stored in the same blocks by clustering the tables into the same segment (blocks are indexed by the common attribute) = materialized join. This reduces I/O and saves space but updates are more expensive. E.g. Clustered Tables in Oracle, see Figure \ref{fig:cluster}.
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.8]{images/2-cluster.PNG}
+	\caption{Oracle: Clustered Tables.}
+	\label{fig:cluster}
+\end{figure}
+
+\paragraph{Log Structured Databases}
+Instead of storing tuples and modifying them as needed, only store a record of how the data is modified (a log). With this, inserts record the entire tuple, deletes indicate that a tuple is invalidated and updates record modified tuples (no in-place updates). New log entries are simply appended at the end of the log file (much faster than random access). Mainly used for in-memory OLTP (minimizes cost for making data persistent) and cloud storage (file storage is typically append only). Not useful for heavy OLAP. To optimize this concept, the log file is periodically compacted (remove history by adding only one entry for each tuple - all operations are applied) and the tuples and their modifications are indexed. %TODO more?
+
+\paragraph{No Indices}
+Snowflake uses micro-partitions instead of indices (see previous section) and MonetDB (column store) uses database cracking: the index is built incrementally while the data is being processed on a column-wise basis. Initial queries are expensive but later cost us amortized as (some) work has already been done. See example in Figure \ref{fig:crack}. %TODO more?
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.8]{images/2-crack.PNG}
+	\caption{Database cracking example.}
+	\label{fig:crack}
+\end{figure}
+
+
+\subsection{Reading Assignments}
+
+\subsubsection{Modern B-Tree Techniques}
+
+\subsubsection{The Design and Implementation of Modern Column-Oriented Database Systems}
+
+\subsubsection{Data Page Layouts for Relational Databases on Deep Memory Hierarchies}
+
+\subsubsection{A Hybrid Page Layout Integrating PAX and NSM}
+
+\subsection{Exercises}
+
+\subsubsection{Page Layouts and Indexing}
+
+\subsubsection{Indexing}
