@@ -1,0 +1,89 @@
+\section{SSL/TLS Public Key Infrastructure}
+
+\paragraph{Goal of TLS}
+Achieve secure internet communication by preventing eavesdroppers from learning sensitive information and enabling entity and message authentication.
+
+\paragraph{TLS Challenges}
+\begin{itemize}
+    \item No additional latency of contacting servers during TLS handshake.
+    \item Keys should be immediately usable and verifiable after initial registration.
+    \item Users should not be concerned with checking the legitimacy of a certificate.
+    \item Covering the entire certificate life cycle.
+\end{itemize}
+
+%TODO: approaches to improve TLS and what's wrong with it, let's encrypt, ACME
+
+\paragraph{Certificate Authority (CA)}
+Entity (trusted third-party) that issues digital certificates, which certify the ownership of a public key by the uniquely named subject.
+
+\paragraph{(Public-Key) Certificate}
+The format of such certificates is specified by the \textit{X.509} or \textit{EMV} (proprietary - used for ATMs and the like) standard. Certificates can be revoked and renewed (challenge: consistency, availability and tolerance to partition - CAP theorem). 
+
+Additionally to CA signed, certificates can be self-signed (changes the trust model, considered unsafe for public-facing services, suitable for internal sites or testing environments).
+
+%TODO: examples, x.509
+
+\paragraph{Trust Anchor / Root}
+Self-signed certificates of public keys that are allowed to sign other certificates (trust assumed, not derived). One anchor can involve multiple entities. Involved in the whole chain of trust and used during certificate path validation (certificate hierarchy). With cryptographic operations, trust can be transferred from one entity to another.
+
+Root certificates are only used to sign intermediate certificates since they need to be as safe as possible. Revoking even one of them can make many certificates invalid if they sign more. Roots are kept offline and used as rarely as possible.
+
+\paragraph{PKI Alternatives}
+If one of the many trusted CAs is compromised, security of all digital certificates is susceptible to attacks. One alternative architectures is Attack Resilient PKI (ARPKI). To impersonate a domain, a large number of entities need to be compromised. Another alternative is a web of trust = distributed PKI as seen in Pretty Good Privacy (PGP).
+
+\paragraph{ARPKI}
+%TODO
+
+\paragraph{Web of Trust / PGP}
+Decentralized PKI where users establish direct trust with each other (private and public key system). Indirect trust to a destination can be established by trusting someone that directly trusts destination. There are no CAs and therefore no single point of failure stemming from a compromised CA hierarchy.
+
+PGP uses this model to provide cryptographic privacy and authentication for data communication. It is used for signatures and encryption.
+%TODO: more
+
+\paragraph{Trust Agility}
+The ability for the user to choose which entities to trust. User can also specify to require additional certification for entities not covered by chosen group of trust anchors.
+
+\paragraph{Levels of Trust}
+\begin{itemize}
+    \item \textbf{No SSL/TLS:} domain/website served via HTTP.
+    \item \textbf{Domain Validation (DV):} site is secure, not necessarily the entire business.
+    \item \textbf{Organisation Validation (OV):} CA carries out some vetting of the organisation (verify existence of company and domain name, verification phone call, etc.)
+    \item \textbf{Extended Validation (EV):} CA undertakes comprehensive vetting process of the organisation (verify legal and physical existence of organisation, identity matches official records, exclusive rights to the domain, etc.).
+\end{itemize}
+
+\paragraph{HTTP Strict Transport Security (HSTS)}
+Allows web servers to declare that browsers / user agents should automatically interact with it using only HTTPS connections. HSTS helps to protect websites against MITM-attacks (i.e. protocol downgrade, cookie hijacking = stealing session keys in HTTP, etc.).
+
+\paragraph{HTTP Public-Key Pinning (HPKP) (deprecated)}
+Allows HTTPS websites to resist impersonation by attackers using misissued/fraudulent certificates. A set of hashes of public keys valid for a given time is delivered to the client (web browser) which must appear in the certificate chain of future connections to the same domain name. During their validity time, a client expects to see one or more of those public keys in its certificate chain.
+
+Since HPKP is trust on first use (TOFU), meaning the provided hashes are trusted, it can still be susceptible to a MITM attack if the first policy received comes from an attacker. Furthermore, weak hashes allow for easy collisions.
+
+Careful: when renewing the certificates for a domain, new hashes (with a new age) have to be distributed to not DoS oneself.
+
+\paragraph{Online Certificate Status Protocol (OCSP)}
+Protocol to obtain the revocation status of an X.509 certificate - an alternative to certificate revocation lists (CRL). OCSP responders (servers) respond to requests to verify the status of a certificate to check if it is still valid. Vulnerable to replay attack where an attacker captures the "still good" response and replays it at a later time where the certificate might already be revoked.
+
+\paragraph{OCSP Stapling}
+Standard for checking the revocation status of X.509 digital certificates. The presenter of a certificate can bear the resource cost involved in providing OCSP responses by appending (= stapling) a time-stamped OCSP response signed by the CA to the initial TLS handshake - eliminating the need for the client to contact the CA.
+
+Original OCSP introduced a significant cost for CAs because they have to respond to numerous OCSP requests. Furthermore, privacy issues were introduced with the need to contact a third-party and not receiving a response can be annoying.
+
+\paragraph{DNS-Based Authentication of Named Entities (DANE)}
+Protocol to bind X.509 certificates to domain names using Domain Name System Security Extensions (DNSSEC). Allows to authenticate TLS entities without a CA. %TODO: use cases?
+
+\paragraph{Certificate Transparency (CT)}
+A standard for monitoring and auditing digital certificates. It creates a system of public logs recording all certificates issued by publicly trusted CAs. This allows for efficient identification of mistakenly / maliciously issued certificates (which is usually very slow). Makes it impossible for a certificate to be issued for a domain without the domain owner knowing.
+
+In a CT log, new certificates are appended to an ever-growing signed (by log server) Merkle Hash Tree. Each appended certificate must have a valid signature chain. Monitors (CAs) check the log servers for misbehavior and request the addition of a newly issued cert. Auditors (clients) verify certificate existence by checking the log servers and exchange info with the monitors on the log server status (to ensure that it is not compromised).
+
+Certificates stay on the log forever (even revoked ones). Merkle Tree insertions are easy but immediate deletion is not. System might implement revocation transparency.
+
+Often used together with OCSP stapling in which a certificate presenter has to add certificate to a public log and the CT log signature needs to be stapled to signature.
+
+%TODO: more on this, watch lecture, exercise 2!
+
+
+
+
+

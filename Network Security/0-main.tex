@@ -1,0 +1,116 @@
+\documentclass[paper=a4, parskip=half-]{scrartcl}
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{marvosym} % for the \Lightning symbol
+\usepackage{amssymb} % more icons/symbols
+\usepackage{tablefootnote} % for footnotes in tables
+% not in standard texlive, can't be asked to figure it out now
+%\usepackage{ccicons} % creative commons icon
+\usepackage{hyperref} % for hyper links
+\usepackage[dvipsnames]{xcolor} % to color stuff -- dvipnames for additional color names
+\usepackage[shortlabels]{enumitem} % to modify enumeration labels
+\usepackage{tcolorbox} % for colored boxes - see https://tex.stackexchange.com/questions/66154/how-to-construct-a-coloured-box-with-rounded-corners/172608#172608
+\usepackage{tikz} % drawing stuff
+\usepackage{eurosym} % € (no, default LaTeX font doesn't include it)
+\usepackage{natbib}
+\usepackage{graphicx}
+
+\usepackage{geometry}
+ \geometry{
+ a4paper,
+ left=20mm,
+ right=20mm,
+ top=20mm,
+ bottom=30mm,
+ }
+
+
+\title{Network Security}
+\author{\texttt{\{wnicole\}@ethz.ch}}
+\date{ETH Zürich, HS 2020}
+
+% Custom commands
+\newcommand{\setzeroone}{\lbrace 0, 1 \rbrace} % => {0,1} (Notice the missing $$)
+\newcommand{\horizontaldivider}{\begin{center} \line(1,0){350} \end{center}}
+
+\begin{document}
+
+\begin{titlepage}
+\maketitle
+\vspace{5cm}
+\thispagestyle{empty}
+
+
+\begin{abstract}
+This is a summary for the course \textit{Network Security} at ETH Zurich.
+
+We do not guarantee correctness or completeness, nor is this document endorsed by the lecturers.
+Feel free to point out any erratas.
+\end{abstract}
+
+\end{titlepage}
+
+\tableofcontents
+%\listoffigures
+%\listoftables
+\newpage
+
+
+\input{1-refreshers}
+\newpage
+
+\input{2-PKI}
+\newpage
+
+\input{3-TLS}
+\newpage
+
+\input{4-IPv6}
+\newpage
+
+\input{5-VPN}
+\newpage
+
+\input{6-WLAN}
+\newpage
+
+\input{7-Anon}
+\newpage
+
+\input{8-BGP}
+\newpage
+
+\input{9-real}
+\newpage
+
+\input{910-DDoS}
+\newpage
+
+\input{911-Firewall}
+\newpage
+
+\input{912-Malware}
+\newpage
+
+\input{913-IoT}
+\newpage
+
+\input{914-Chain}
+\newpage
+
+\input{915-DNS}
+\newpage
+
+\input{916-Mail}
+\newpage
+
+\input{917-Traffic}
+\newpage
+
+\input{918-Admin}
+\newpage
+
+
+\end{document}

@@ -1,0 +1,58 @@
+\section{IPv6 Security}
+
+\paragraph{Address Space}
+IPv6 uses 128-bit addresses, which theoretically allows for $2^{128}$ unique addresses. An address is represented as eight colon-separated groups of four hexadecimal digits (can be shortened by excluding the zeroes, e.g. \textit{2001:db8::8a2e:370:7334}).
+
+\paragraph{Link-Local Address}
+An address that is only valid for communications within the network segment/broadcast domain that a host is connected to. In IPv6, they are assigned from the block \textit{fe80::/10} (prefix, with a 64-bit suffix computed by host itself) and every host is required to have at least one / one for each network interface. An LLA is unique in the LAN (also named unique local address, ULA). LLAs can be tranlated to global addresses using a NAT.
+
+To not leak any information, LLAs do not embed the host's MAC address anymore and are instead generated via algorithms using some kind of randomness. Knowing a MAC address allows for physical attacks.
+
+\paragraph{Link-Layer Addresses} To map IP to MAC addresses, IPv6 uses the Neighbor Discovery Protocol (NDP) instead of ARP, since it does not support the broadcast addressing method. Nodes using the requested IP address respond to neighbor solicitation messages originating from an asking host with their link-layer addresses.
+
+This has the potential for a DoS attack by overflowing a host's buffer or overwriting real entries.
+
+\paragraph{Router Solicitation}
+By sending a multicast ICMPv6 router solicitation message to the all-routers group, a host learns about the network from neighbouring routers (router advertisement) and can establish a globally unique address with an appropriate unicast network prefix. Router advertisements also include further information, i.e. if and how DHCP should be used by the host.
+
+\paragraph{Duplicate Address Detection (DAD) DoS}
+Hosts use DAD to assign themselves unique LLAs. To ensure they are unique, hosts ask all nodes of a LAN if the address is already in use. This allows for an easy DoS by simply replying that the address is already in use to each DAD request.
+
+\paragraph{Shadow Networks}
+Data flowing through new IPv6-enabled connections and onto the existing IPv5 network while the IPv4 security in place is unable to identify this new type of traffic (e.g. traffic is not subject to firewall rules, etc.). This is a problem if a network admin is not aware of new IPv6 ability.
+
+In general, IPv6 connectivity cannot be prevented as long as a node is part of a bi-directional communication. Such a channel can be used as a tunnel.
+
+\paragraph{Tunneling}
+The act of encapsulating IPv6 packets in IPv4 packets to allow for IPv6 connectivity anywhere. Not used much.
+
+E.g.: \textit{Teredo}, \textit{6to4}, etc.
+
+\paragraph{Injecting IPv6 Addresses}
+In a LAN without an IPv6 router, a host could be made to act like one. All IPv6 capable hosts automatically assign themselves an IPv6 address. With this, the host can easily enact a MITM attack and bypass any IPv4 firewalls (via tunneling).
+
+If a LAN already hosts IPv6 routers, one can simply setup a router with a higher priority since router advertisements include a priority field.
+
+Such rogue router advertisements can be prevented via filtering (RA and DHCPv6 messages).
+
+\paragraph{Multicast Groups}
+IPv6 does not implement IP broadcast with a special broadcast address. Using multicast groups, a message can be broadcasted to all link-local nodes (\textit{ff02::1}) or all link-local routers (\textit{ff02::2}).
+
+\paragraph{Filtering}
+%TODO: ?
+
+\paragraph{Fragmentation Attack}
+IPv4 fragments packets, requiring routers to store and/or re-assemble packets. By sending bogus or overlapping fragments, a router can crash (memory exhaustion). IPv6 does not support fragmentation in the network - the work is shifted to the end hosts (routers return ICMP6 messaged indicating that a packet is too big).
+
+\paragraph{Internet Protocol Security (IPsec)}
+Authentication and encryption of IP packets (mainly used for VPNs). Part of the IPv6 specification but not implemented in practice (too complex (NATs), other methods of security) - only a recommendation.
+
+\paragraph{NAT Is Not Security (NINS)}
+NAT maps IP addresses 1:1 / 1:n or to protocol ports (PNAT). It is not to be used as a (stateful) firewall, since access from outside is possible if the table entries are known. %TODO: more on NAT vs. firewall?
+
+\paragraph{Conclusions}
+\begin{itemize}
+    \item IPv6 is not more or less secure than IPv4.
+    \item Attacks are similar to the ones on IPv4.
+    \item Networks need to be prepared to handle IPv6 to avoid security holes.
+\end{itemize}

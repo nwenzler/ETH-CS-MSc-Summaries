@@ -1,0 +1,138 @@
+\section{Anonymous Communication Systems}
+
+\subsection{Overview}
+
+\paragraph{Sender Anonymity}
+Adversary knows / is receiver and may learn messages. The sender is unknown but provides a return address / token.
+
+\paragraph{Receiver Anonymity}
+Adversary knows / is sender and may choose the messages. The receiver is unknown and receives data via a hidden service (pseudonym is known).
+
+\paragraph{Sender / Receiver Anonymity Set}
+Set of all individual senders / receivers indistinguishable from the real sender / receiver. The smaller the set, the less anonymity.
+
+\paragraph{Unlinkability}
+Adversary knows senders and receivers but not the link in between. Multiple users need to be communicating for this to work. Anonymity results in unlinkability.
+
+\paragraph{Unobservability}
+Adversary cannot tell whether any communication is taking place. For wireless, use methods like DSSS. For wired, constantly send traffic. Unobservability results in anonymity.
+
+\paragraph{Plausible Deniability}
+Adversary cannot prove that any particular individual was responsible for a message / any action. Anonymity results in plausible deniability.
+
+\paragraph{Thread Model(s)}
+An adversary may have:
+\begin{itemize}
+    \item Various degrees of control (local / global).
+    \item Various types of (combinations of) control (network, compromised infrastructure, etc.). However, the infrastructure is never fully compromised.
+    \item Passive or active behavior.
+\end{itemize}
+This results in unclear guarantees since the thread model is often not clearly specified.
+
+\subsection{Mechanisms for Anonymous Communication}
+
+\begin{itemize}
+    \item \textbf{Broadcast:} for wireless communication, guaranteed receiver anonymity. However, a sender can be de-anonymized via triangulation. Use DSSS if the destination is trusted.
+    \item \textbf{Hijacked Connections:} using a burner phone or hacking a WiFi connection to impersonate an ID.
+    \item \textbf{Proxy / VPN:} to hide content from a proxy, use layered encryption. Problems: proxy can see metadata and may be a single point of failure. Use a cascade (onion) of multiple proxies (each proxy only sees addresses of two neighbors, works as long there is one honest proxy, message / forwarding info is encrypted multiple times).
+\end{itemize}
+
+\paragraph{Mix-Nets}
+To obscure in- and outgoing messages, each proxy performs batching (collecting several messages and forwarding them if specific threshold is met). Additionally, proxies should change the order of the messages (mix). All messaged need to be padded to a fixed length to make them indistinguishable.
+
+Vulnerable to intersection attacks. Since users often only communicate with a small subset of other users, an adversary can register the sets of destinations each time a message is seen,i.e. long term correlation attack (also possible with inter-packet intervals). More effective attack: statistical disclosure.
+
+Return addresses are prepared by senders to receive replies. Senders know what keys will be established with each threshold mix proxy.
+
+Problem: high latency, bad for web browsing - see Onion routing below. Forward security is not guaranteed.
+
+\paragraph{Cover / Dummy Traffic}
+Achieves full unobservability and prevents statistical disclosure attacks both for sending and receiving. A receiver regularly tries to retrieve messages from a threshold mix proxy and downloads it if there is any, else dummy message is returned. Not possible on Onion Routing.
+
+\paragraph{Onion Routing / Circuit-Based Anonymity Networks}
+No batching and mixing and no cover traffic, only layered encryption. Onion routing is flow-based, a virtual circuit / tunnel (keys) is established once per flow using only symmetric key crypto and each packet is forwarded by relays (proxy nodes). This has a lower anonymity guarantee than the previously introduced mechanisms. Also, the threat model is constrained - we can only deal with local adversaries that cannot launch confirmation attacks.
+
+A sender remains anonymous because each intermediary knows only the location of the immediately preceding and following nodes. Only the final node knows its location in the chain, others don't know if they're the first or immediate ones.
+
+\textbf{Circuit setup:} 
+
+\textbf{Direct circuit setup:} 
+
+\textbf{Telescopic circuit setup:} 
+
+\textbf{Data forwarding:} 
+
+\textbf{Circuit teardown:}
+
+For all points above, see extra notes.
+
+\paragraph{Mix-Nets vs. Onion Routing}
+\begin{itemize}
+    \item \textbf{Forwarding System:} message-based vs. circuit-based.
+    \item \textbf{Layered Encryption:} asymmetric vs. symmetric.
+    \item \textbf{Forward Security:} no vs. yes in case of the telescopic setup.
+    \item \textbf{Latency:} high vs. low / medium.
+    \item \textbf{Guarantees:} strong vs. attacks possible for strong adversaries.
+\end{itemize}
+
+\subsection{Attacks on Circuit-Based ACS}
+
+Traffic-analysis attacks (confirmation attacks), e.g. flow / website fingerprinting, and higher-layer attacks, e.g. stack fingerprinting.
+
+\paragraph{Passive Traffic Analysis}
+Adversary observes edges of the network and records traffic patterns (flow length, bandwidth pattern, inter-packet timings). If measurements at two ends are similar / the same, an attacker could conclude that they are communicating. Real-time detection is challenging, more common to store and compare later (large storage needed).
+
+\paragraph{Active Traffic Analysis}
+Adversary actively modifies inter-packet timings (delaying / reordering packets). Packet drops possible but often detectable. If the clearly visible change is detected at the other end, attacker can conclude that they are communicating.
+
+Flow watermarking: inject one bit of info (marked or not). Flow fingerprinting: inject multiple bits (e.g. sender IP address) to make the detection of correlation even easier. 
+
+This requires a very strong attacker that controls the incoming traffic to a anonymous network (and can observe the outgoing traffic as in the passive case).
+
+\paragraph{Website Fingerprinting}
+Adversary needs only one observation point (ISP, other WiFi user, etc.). By building a database of fingerprints of websites (how many packets are send from each website), the fingerprints can be compared to the observed traffic patterns and the attacker can conclude which websites were accessed. Particularly effective for interactive applications such as health / tax forms. 
+
+\paragraph{Traffic Analysis Resistance}
+To resist such traffic analysis attacks, one could combine cover traffic and mixing (as mentioned above). Unfortunately, this introduces a significant overhead and is difficult to scale (large volumes of dummy traffic required). Such methods are only suitable for few applications (e.g. VoIP) with low bandwidth. To be really secure: restrict set of flow duration and bandwidth combination.
+
+\paragraph{Higher-Layer Attacks}
+Instead of observing / comparing / manipulating traffic, an attacker can observe information leaked from the protocols used, e.g. an end-to-end TCP might leak information due to the way the sequence numbers are chosen, how header fields are set, congestion control mechanisms, etc. This either requires packet inspection or being a malicious receiver.
+
+A possible solution is to replace an end-to-end TCP connection with per-hop TCP connections.
+
+HTTP / TLS fingerprints are in most cases unique (OS, browser type, languages, timezone, etc.). See amiunique.org/fp. To protect: either randomize the fingerprint each time a user is accessing the web or make them all look the same (uniformity - as in TOR).
+
+Normally, a de-anonymization attack is done in other ways by, for example, tricking a user into downloading malware / files accessing Internet directly, analysing user behavior (e.g. text written in an online forum). To be anonymous, each layer (even human layer) has to be anonymized since any gap will break it entirely (unlike any other security properties).
+
+
+
+\subsection{Tor: Second Gen Onion Router}
+
+See extra notes.
+
+\textbf{Additional features:} 
+
+\textbf{Tor cells:}
+
+\textbf{Example circuit setup:}
+
+\textbf{Circuit extension:}
+
+\textbf{Hidden services:}
+
+\textbf{Directory authorities:}
+
+\textbf{Censorship resistance:} 
+
+
+\subsection{Summary}
+
+\begin{itemize}
+    \item You cannot be anonymous on your own (anonymity set).
+    \item Anonymous communication is enabled by multiple relays and layered encryption.
+    \item Mix-nets vs. circuit-based systems.
+    \item Anonymous communication can be used for both good and bad purposes.
+\end{itemize}
+
+
+
