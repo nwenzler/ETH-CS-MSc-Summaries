@@ -2,14 +2,13 @@
 
 \subsection{Introduction}
 
-A big part of the performance of databases arises from proper storage management (movement through hierarchy), adequate data representations and suitable optimizations on organizing the data in memory.
+A big part of the performance of databases arises from proper storage management (movement through hierarchy), adequate data representations and suitable optimizations on organizing the data in memory and disk.
 
-Databases provide the illusion of large memory capacity and try to hide the performance problems created by implementing desirable properties (high bandwidth for seq. and concurr. access, low latencies for random accesses, persistent, etc.) through complex architectures and optimizations.
+Databases provide the illusion of large memory capacity and try to hide the performance problems created by implementing desirable properties (high bandwidth for sequential and concurrent access, low latencies for random accesses, persistent, etc.) through complex architectures and optimizations. Two key guarantees we want to have provided by a DB storage system are: persistent and recoverable data (even in the event of a failure). We would also like physical data independence.
 
-Two key guarantees we want to have provided by a DB storage system are: persistent and recoverable data (even in the event of a failure). We would also like physical data independence.
+
 
 \subsection{Memory Hierarchy}
-%TODO memories
 
 Databases go through the entire memory hierarchy frequently. Enhance locality (data organization, query scheduling), make sure data is available at layer where it is needed (pre-fetching), be clever about what to keep at each layer (caching, replacement) and keep track of modifications and write back to the lower layers (to persistent storage) when needed.
 
@@ -43,8 +42,6 @@ Put together what belongs together.
 \paragraph{Temporal Locality}
 Do at the same time things that require the same data.
 
-%TODO more on concepts below?
-
 \paragraph{Non-Volatile Memory (NVM)}
 Located between DRAM and local external storage - combines characteristics of both. Byte addressable, random access, persistent, etc.
 
@@ -55,7 +52,7 @@ Network between compute and storage layer. Ephemeral nature of computing infrast
 Networks are becoming faster with more bandwidth than storage devices (e.g. RTT in a data center less than a seek operation on a HDD). Eventually, it might be faster to get data from the memory of a remote machine / storage device than from local disk. See also: Remote Direct Memory Access (RMDA).
 
 \paragraph{Multicore and NUMA}
-
+%TODO potentially
 
 \paragraph{Hardware Acceleration}
 
@@ -63,7 +60,10 @@ Networks are becoming faster with more bandwidth than storage devices (e.g. RTT 
 
 
 
-\subsection{Segments and File Storage}
+
+
+
+\subsection{Logical Storage Organization}
 
 See the first layer in Figure \ref{fig:arch}. Assumptions: the standard database architecture is based on slow hard drive disks (HDD) that have a high latency for seek operations (random access) - most of the DB is \textbf{not} in memory.
 
@@ -85,15 +85,20 @@ A given logical object in a DB (table, index, etc.) is "stored" in a tablespace,
 
 %TODO more images?
 
-\paragraph{Tablespace}
-Data unit in a DB which provides a logical representation of the principle of spatial locality (not necessarily stored continuously!) - some form of virtual memory. Data stored is either schema related (table, index, clustered tables) or engine related (data structures for the engine, e.g. result buffers). Space (memory / disk) is allocated to tablespaces.
 
-Keep together what needs to be kept together = logical locality = one address.
+\paragraph{Page}
+There are different notions for a page:
+\begin{itemize}
+    \item \textbf{Hardware Pages:} The atomic unit to write to storage, usually 4KB. Also called block sometimes. Part of a file resp. disk sector.
+    \item \textbf{OS Page:} The unit used by the OS to implement virtual memory, usually 4KB.
+    \item \textbf{DB Page:} Equivalent to a block, anywhere between 512B and 32KB. Trend is towards larger block sizes since they incur less overhead (less keeping track).
+\end{itemize}
+
+\paragraph{Tablespace}
+Data unit in a DB which provides a logical representation of the principle of spatial locality (not necessarily stored continuously!) - some form of virtual memory. Data stored is either schema related (table, index, clustered tables) or engine related (data structures for the engine, e.g. result buffers). Space (memory / disk) is allocated to tablespaces. Keep together what needs to be kept together = logical locality = one address.
 
 \paragraph{Segment}
-An object in the schema (or part of an object if it is partitioned). Consists of one or more extents (that can be in different data files). Segments allocate (virtual) space to objects. Usually when allocating space, a DBMS gives a little bit more to have some growing space.
-
-Even if a table is partitioned into several segments across various disks, the table still has only one tablespace.
+An object in the schema (or part of an object if it is partitioned). Consists of one or more extents (that can be in different data files). Segments allocate (virtual) space to objects. Usually when allocating space, a DBMS gives a little bit more to have some growing space. Even if a table is partitioned into several segments across various disks, the table still has only one tablespace.
 
 \paragraph{Extent}
 A collection of physically continuous data blocks (size = tunable /dynamic parameter). Extents are mapped to one data file. Usually when allocating space for an extent, a DBMS gives a little bit more to have some growing space (1.25x common).
@@ -130,20 +135,30 @@ A DB provides concurrency control (DB correct even if several transactions modif
 
 
 
+
+
+
+
+
+
+
+
+
 \subsection{Database Buffer Cache}
 
-%TODO more on architecture
-
-See second layer in Figure \ref{fig:arch}. To process data, it has to reside in memory. Since not all the data fits into memory, databases cache blocks in memory and write them back to storage when dirty or in need of more space. The cache is not used for actual processing - intermediate results are stored in the database heap (region of memory where queries actually work on the data).
+See second layer in Figure \ref{fig:arch}. To process data, it has to reside in memory. Since not all the data fits into memory, databases cache blocks in memory and write them back to storage when dirty or in need of more space. So, to provide efficient access to pages, a DBMS implements a large shared buffer pool in its own memory space. A buffer pool is organized as an array of frames, each of the size of a DB disk page. The buffer cache is not used for actual processing - intermediate results are stored in the database heap (region of memory where queries actually work on the data).
 
 Similar to OS virtual memory / paging mechanisms but a DB has much better knowledge about access patterns and the process can be optimized to a larger extend.
 
 It is important to keep the overhead of data structures in mind that are needed to keep track of things.
 
+\paragraph{Buffer Manager}
+The buffer manager does all the bookkeeping of the buffer pool and is implemented as a hash table. The table maps page numbers currently held in memory to their location in the frame table, the location for that page on disk and additional metadata associated with the page. The metadata includes a dirty bit indicating the data on the page has been modified and info needed by the chosen replacement policy (pin count, statistics, etc.).
+
 \begin{figure}[h]
 	\centering
 	\includegraphics[scale=0.8]{images/1-buffer.PNG}
-	\caption{Architecture of a DB buffer cache.}
+	\caption{Architecture of a DB buffer manager.}
 	\label{fig:buffer}
 \end{figure}
 
@@ -151,14 +166,14 @@ It is important to keep the overhead of data structures in mind that are needed 
 To check if a block is in memory, we take its ID and hash it. Look up the position indicated by the resulting value to check. This is the first check we need to do when processing data.
 
 \paragraph{Latches}
-Mechanism to access hash table(s) without the risk of a conflicting concurrent access (similar to a lock)\footnote{Locks usually avoid conflicting updates to data by transactions, while latches avoid conflicting updates in system data structures.}. A latch usually covers several hash buckets (tunable parameter). Latching per bucket or even per block header results in too much overhead since there are so many. %TODO how to get correct latch?
+Mechanism to access hash table(s) without the risk of a conflicting concurrent access (similar to a lock)\footnote{Locks usually avoid conflicting updates to data by transactions, while latches avoid conflicting updates in system data structures.}. A latch usually covers several hash buckets (tunable parameter). Latching per bucket or even per block header results in too much overhead since there are so many.
 
 \textbf{Performance Issues:} To check if a block is in memory, a latch needs to be acquired. Since a latch can be only owned by one process, this process blocks several linked lists of block headers. Contention on these latches may cause performance problems (hot blocks, SQL statement accessing many blocks, similar statements executed concurrently, etc.).
 
 \textbf{Mitigation:} Reduce amount of data in the block (with PCTFREE / PCTUSED), more latches and less buckets per latch, multiple buffer pools, tune queries to minimize number of blocks accessed (avoid table scans), avoid many concurrent queries / transactions accessing same data, etc.
 
 \paragraph{Hash Bucket}
-Correct linked list storing block header is found by hashing on some form of block identifier. %TODO more? why bucket? how?
+Correct linked list storing block header is found by hashing on some form of block identifier. 
 
 \paragraph{Buffer Header Double Linked List}
 After hashing, the linked list is traversed looking for an entry (block header) for the corresponding block. Keep the lists short since this is expensive (have more buckets). A block header contains lots of info (block number, type, format, LSN, integrity checksum, latches / status flags, buffer replacement info).
@@ -169,7 +184,7 @@ Some engines store other types of blocks in the linked lists, e.g. version block
 The following states are relevant for the management of the buffer: pinned (block cannot be evicted), usage count (statistics on specific block), clean / dirty. This info is used when implementing cache replacement policies. 
 
 \paragraph{Cache Replacement Policy}
-What to cache, what to keep, how to evict and when, how to avoid thrashing cache with unnecessary traffic. %TODO more?
+What to cache, what to keep, how to evict and when, how to avoid thrashing cache with unnecessary traffic.
 
 \textbf{Least Recently Used (LRU):} Keep track of when a block was used in a list - most recently used. When evicting, pick the least recently used block at the bottom. Does not work very well for DBs (in contrast to OSes) since large table / index range scans can pollute the cache without actually needing to re-access the cached data.
 
@@ -207,8 +222,6 @@ Instead of using physical storage, we are now looking at using a cloud storage a
 
 \paragraph{Snowflake}
 A data warehouse specialized for analytical queries developed entirely on the cloud (cloud native). Separates compute (nodes running VMs with a local disk) from storage (Amazon S3).
-%TODO analytical queries vs transactions/other - more complex, lots of data
-%TODO more? or just paper
 
 The query processing layer (compute) is made up of virtual warehouses, with each consisting of a collection of worker nodes (EC2 instances in Amazon). Each worker node has a cache in its local disk with a simple LRU replacement policy. Metadata in the cloud services level tells us where things are stored. %TODO right?
 
@@ -258,12 +271,82 @@ S3 does not support in-place updates (immutable), an object is replaced in its e
 
 \subsubsection{An Evaluation of Buffer Management Strategies for Relational Database Systems}
 
+Again: data has to be in RAM for a DBMS to operate on it! A buffer manager intelligently shuffles data from disk to memory. A buffer pool contains frames that can hold pages brought in from disk and are otherwise free. The pool is filled according to some kind of algorithm and replacement policy. A pinned page is a page currently in use - it should not be replaced. Pages that contain modified data are dirty and need to be written back to disk before discarding them.
+
+\paragraph{Domain Separation Algorithm}
+Why? Not all pages are the same! Pages are statically classified into types. If a page of type X is needed, allocate it in pool X = domain X. A pool contains several buffers = slots to put the requested pages into. In each domain, LRU is used as the replacement policy. If no slots are available in current domain, borrow slots from another domain.
+
+A suggested type assignment scheme is: assign one domain to each non-leaf level of a B-Tree structure while all the leaves and their data also get one domain.
+
+Cons: Domains are a static concept - the importance of a page may vary across queries - relative importance matters. Partitioning buffers according to domains rather than queries does not prevent interference among competing users. Thrashing is still an issue, there is no load control. There are no priorities among domains (e.g. index page $>$ data page).
+
+\paragraph{Group LRU Algorithm}
+The above but with a fixed priority ranking among different groups = domains. Searching for free space always starts at domain with lowest prio.
+
+\paragraph{DS with Working-Sets}
+The above but each domain can dynamically vary in size - working-set-like partitioning scheme. Pages in domain i which have been referenced in the last t\_i references are exempt from replacement consideration.
+
+\paragraph{Page-Type Algorithms}
+All of the above - TL;DR: they're shit and not really superior to simple LRU or CLOCK.
+
+\paragraph{"New" Algorithm}
+Shittiest name ever by the way. Two key observations: The priority of a page is not a property of the page; in contrast, it is a property of the relation to
+which that page belongs. Each relation should have a Working Set. 
+
+Buffer pool is subdivided and allocated per-relation. Each relation with buffered pages has a resident set = all buffered pages - replacement policy within each is MRU. Each active relation is entitled to one pinned buffer. Resident sets are linked in a priority list with a global free list on top. High priority (based on some heuristic) is at bottom and less likely to be replaced than top since search for free space starts at top.
+
+Cons: MRU. How to assign prios? List search. No regard for multi-user use case. TL;DR: it has a shitty name AND it is shitty. It's 2 AM and I'm tired.
+
+\paragraph{Hot Set Algorithm}
+Hot set: set of pages over which there is a looping behavior - keep those in memory by allocating a large enough buffer pool. Hot point: plot buffer size vs. number of page faults and observe that at some point the buffer is too small and MRU/LRU is shit which equates to lots of page faults. E.g. nested loop join with seq. scan: hot point = number of pages in inner relation plus one.
+
+Hot points for different kinds of queries can be determined but it depends on replacement algo (MRU works better than LRU sometimes, especially in cyclic loops).
+
+Query receives hot points amount of buffers. New query can only enter the system if there's enough space for it according to its hot set size. Leads to memory under-utilization due to overallocation.
+
+\paragraph{Query Locality Set Model (QLSM)}
+A RDBMS supports a limited set of operations and the pattern of page references they exhibit are regular and predictable. Each pattern can be decomposed into a number of simple reference patterns. With this, the size of a locality set can be determined in advance per query (= set of buffered pages associated with a file instance = multiple pages belonging to same table). %TODO examples below, check notes for reference patterns
+
+\textbf{Sequential References:} Pages are referenced and processed one after another. \textbf{Straight sequential (SS):} sequential scan without repetition, set = 1. \textbf{Clustered sequential (CS):} clusters made up of records with same key are scanned multiple times, buffer should keep clusters until scan moves on to next cluster, set = number of records in largest cluster divided by numbers of records per page (blocking factor), FIFO and LRU work best. \textbf{Looping sequential (LS):} repeated sequential scan, buffer needs to keep entire file and if it's too large use MRU, set = total number of pages in the file.
+
+\textbf{Random References:} \textbf{Independent random (IR):} data pages are accessed in a random manner. \textbf{Clustered random (CR):} random accesses of clusters, set = number of records in largest cluster. %IR TODO
+
+\textbf{Hierarchical References:} Sequence of page accesses forming a traversal path from root to leaves of an index. \textbf{Straight hierarchical (SH):} index is traversed only once, one buffer frame is enough, set = 1. \textbf{Hierarchical SS (H/SS):} tree traversal with sequential scan of the leaves, set = 1. \textbf{Hierarchical CS (H/CS):} tree traversal with clustered sequential scan of the leaves, set = same as in CS, but replace record with key-pointer pair. \textbf{Looping hierarchical (LH):} repeated access to index structure, pages closer to root are accesses more frequently. %TODO LH
+
+\paragraph{DBMIN}
+See extra notes.
+
+
+
+
+
+
+
 \subsubsection{Native Storage Extension for SAP HANA}
 
+\paragraph{SAP HANA}
+Column-oriented in-memory DBMS combining OLTP and OLAP with the possibility to also use row-store. It uses multiversion concurrency control (MVCC) to manage concurrency.
+
+\paragraph{SAP HANA with NSE}
+Basically the memory-disk model that we have seen until now. Cold data on disk, hot data in memory, warm data in buffer pool.
+
+
+
+
+
+
 \subsubsection{The Snowflake Elastic Data Warehouse}
+
+
+
+
+
+
+
+
+
 
 \subsection{Exercises}
 
 \subsubsection{DBMIN}
-
-\subsubsection{Column-Store}
+% IMPORTANT
