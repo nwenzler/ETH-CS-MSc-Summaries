@@ -45,19 +45,17 @@ A transaction manager goes through the following operations:
 	\label{fig:manager}
 \end{figure}
 
-%TODO more on lock table? other trans. manager designs
 
 \paragraph{Conflicts}
+Pair of operations with at least one read, read-read (RR) does not cause a conflict.
 \begin{itemize}
     \item \textbf{Write-Read (WR) / Dirty Read:} T2 reads object modified by T1 before T1 committed.
     \item \textbf{Read-Write (RW) / Unrepeatable Read:} T1 reads object that is modified and committed by T2, T1 then reads the same object again which results in a different value.
     \item \textbf{Write-Write (WW) / Lost Update:} T1 modifies an object previously modified by T2 with T1 committing before T2.
 \end{itemize} 
-If no write is involved, read-read (RR) does not cause a conflict.
 
-%TODO abort / commit conflicts
 
-\paragraph{History / Schedule} %SUMMARY image, serial vs. recover
+\paragraph{History / Schedule}
 A partially ordered sequence of operations from a set of transactions. 
 
 
@@ -68,6 +66,13 @@ How to ensure that the data remains consistent (data integrity) with a number of
 
 \paragraph{ACID}
 A set of properties of transactions intended to guarantee data validity despite errors, power failures and other mishaps. See Figure \ref{fig:acid}.
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.8]{images/00-acid.PNG}
+	\caption{The ACID principle.}
+	\label{fig:acid}
+\end{figure}
 
 \textbf{Atomicity:} (Group of) operations taking place in their entirety or not at all. Intermediate states are not guaranteed to be correct. Atomicity requires isolation meaning that intermediate state should never be seen by another transaction.
 
@@ -87,16 +92,19 @@ Two histories are equivalent iff they include the same transactions containing t
 One can be transformed to the other by swapping non-conflicting operations.
 
 \paragraph{Serializable History}
-History is serializable iff it is equivalent to a serial history. If it is, it is correct (leaves the DB in a consistent state). %TODO commit included?
+History is  serializable iff it is equivalent to a serial history. If it is, it is correct (leaves the DB in a consistent state). To see that a history is serializable but neither CS nor VW we need to know more than just the reads and the writes - context is needed (maybe the transactions produce the same result at the end no matter what order).
 
 \paragraph{Serializability Graph}
-A compact representation of the dependencies in a history. One node per committed transaction. Edge from T to T' if an action of T precedes and is in conflict with an action of T'. %TODO examples
-
-\paragraph{Serializability Theorem}
-A history is serializable iff its serializability graph is acyclic. Sorting it topologically results in an equivalent serial history.
+A compact representation of the dependencies in a history. One node per committed transaction. Edge from T to T' if an action of T precedes and is in conflict with an action of T'.
 
 \paragraph{Conflict Serializability}
-If a history can be transformed into a serial history by swapping non-conflicting operations it is conflict serializable.
+If a history can be transformed into a serial history by swapping non-conflicting operations it is conflict serializable. Any history that is CS is also S but not vice versa.
+
+\paragraph{Serializability Theorem}
+A history is conflict serializable iff its serializability graph is acyclic. Sorting it topologically results in an equivalent serial history.
+
+\paragraph{View Serializability}
+If it is view equivalent to a serial history. View equivalent: initial read in both histories must be the same, read after writes are the same (WR) and final write is the same. Checking for VW is NP-hard. A CS history is also VS but not vice versa. A VS history that is not CS has blind writes (transaction does not read before writing).
 
 
 
@@ -125,31 +133,65 @@ To ensure atomicity in case of a non-completed transaction, we either need to: r
 \paragraph{Recoverable History (RC)}
 If T2 reads an object modified by T1 and commits, T1 committed before T2 did. A committed transaction does not need to be undone since it cannot read wrong data and transactions commit in their serialization order.
 
+W1(X) R2(X) C1 C2
+
 \paragraph{Avoids Cascading Abort History (ACA)}
 If T2 reads an object modified by T1, the read has happened after T2 committed. Aborting a transaction does not cause aborting others and transactions only read from committed transactions.
+
+W1(X) C1 R2(X)
 
 \paragraph{Strict History (ST)}
 If T2 reads / writes an object modified by T1, the operation has happened after T2 committed or aborted. Undoing a transaction does not undo the changes of other transactions and transactions do not read / write updates of uncommitted transactions.
 
-\paragraph{SQL Isolation Levels (ANSI)}
-%TODO
+W1(X) C1/A1 W2(X)/R2(X)
+
+
+\paragraph{SQL Isolation Levels}
+Different standard for isolation levels than explained above and can result in "phenomena" such as dirty reads, non-repeatable reads and phantom reads. See Figure \ref{fig:ilevelsql}.
+\begin{itemize}
+    \item \textbf{Read Uncommitted:} Not RC. Just don't get a lock before reading.
+    \item \textbf{Read Committed:} RC but not ACA, might be non-serializable since successive reads can result in different values from different committed transactions. Write locks are kept until the end, read locks are released after reading.
+    \item \textbf{Repeatable Read:} ACA but not ST, might be non-serializable due to phantom reads. Write and read locks are kept until the end.
+    \item \textbf{Serializable:} Standard, but does not match the definition above since WW conflicts are allowed (see snapshot isolation). Lock on table or cursor.
+\end{itemize}
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.6]{images/4-ilevelsql.PNG}
+	\caption{SQL isolation levels and phenomena.}
+	\label{fig:ilevelsql}
+\end{figure}
+
+
+\paragraph{Dirty Read}
+Reading uncommitted data. Results in non-ACA histories.
+
+\paragraph{Non-Repeatable Read}
+Transaction reads the same item twice but gets different results. History is therefore non-serializable.
+
+\paragraph{Phantom Read}
+Rows are added or removed by a transaction while another transaction is scanning the table and is already past the insertion / deletion point. This happens when, for example, we did not acquire a range lock.
+
+
+
+
 
 \paragraph{Logging}
-In case of system failure (sudden loss of data in memory) the engine needs to recover the DB up to the point of its last committed state which includes all changes made by all committed transactions up until time of failure = recovery procedure. The recovery procedure can only operate with data on permanent storage and needs to be correct even if successive failures occur in the middle of it. To do this, we need to be able to do logging.
+In case of system failure (sudden loss of data in memory) the engine needs to recover the DB up to the point of its last committed state which includes all changes made by all committed transactions up until time of failure = recovery procedure. The recovery procedure can only operate with data on permanent storage and needs to be correct even if successive failures occur in the middle of it. To do this, we need to be able to do logging. A log is kept in persistent storage.
 
-%TODO serial. strict p6? when to write undo redo shit
 
 \paragraph{Recovery Procedure}
-A recovery procedure implemented by a recovery manager requires either undo and redo, just undo or just redo or neither. Undo needs before images (write back before commit) and redo needs after images (write back after commit). %TODO steal and force
+A recovery procedure implemented by a recovery manager requires either undo and redo, just undo or just redo or neither. Undo needs before images (write back before commit) and redo needs after images (write back after commit).
 
 \paragraph{Undo and Redo}
+Same as STEAL/no-FORCE in buffer cache (steal: uncommitted T can overwrite persistent storage which requires undo, force is writing back dirty pages before commit and if we don't have that we need redo). This is the standard approach.
 \begin{itemize}
     \item \textbf{Read:} Simply read value from block on buffer cache.
     \item \textbf{Write:} Create log entry (before and after image) and append to persistent log. Write after image to block on buffer cache.
     \item \textbf{Commit:} Write persistent log entry indicating that T has committed.
     \item \textbf{Abort:} For all updates, restore the before image using the log entry.
 \end{itemize}
-The recovery procedure will start from the end of the log and work backwards and keep two lists: undone items and redone items. Procedure terminates when all items are in either list or we're at the beginning of the log. For each log entry: if the accessed item is not yet in a list apply after image and add to redone list if it is part of a committed T or apply before image and add to undone list if it is part of an aborted T. %TODO pros
+The recovery procedure will start from the end of the log and work backwards and keep two lists: undone items and redone items. Procedure terminates when all items are in either list or we're at the beginning of the log. For each log entry: if the accessed item is not yet in a list apply after image and add to redone list if it is part of a committed T or apply before image and add to undone list if it is part of an aborted T. Pros: buffer has freedom, only forced I/O is log.
 
 \paragraph{Just Undo}
 \begin{itemize}
@@ -158,7 +200,7 @@ The recovery procedure will start from the end of the log and work backwards and
     \item \textbf{Commit:} Flush all dirty values modified by T if still in cache. Write persistent log entry indicating that T has committed.
     \item \textbf{Abort:} For all updates, restore the before image using the log entry.
 \end{itemize}
-Procedure same as above just with one undone list - each item part of an aborted T is restored to before image and added to this list. This relies on the fact that all committed values are in persistent storage and have not been lost. Works if strict execution is assumed. %TODO comments
+Procedure same as above just with one undone list - each item part of an aborted T is restored to before image and added to this list. This relies on the fact that all committed values are in persistent storage and have not been lost. Works if strict execution is assumed. Con: we need force for buffer
 
 \paragraph{Just Redo}
 \begin{itemize}
@@ -167,7 +209,7 @@ Procedure same as above just with one undone list - each item part of an aborted
     \item \textbf{Commit:} Apply all updates in temporary buffer to actual data blocks. Write persistent log entry indicating that T has committed.
     \item \textbf{Abort:} Discard temporary buffer.
 \end{itemize}
-Procedure same as above just with one redone list - each item not in list and part of a committed T is added to list and changes are redone using before image. Relies on never having dirty blocks in buffer cache - all data there is committed and is the most recent version. %TODO comments
+Procedure same as above just with one redone list - each item not in list and part of a committed T is added to list and changes are redone using before image. Relies on never having dirty blocks in buffer cache - all data there is committed and is the most recent version.
 
 \paragraph{Neither}
 Rare resp. not used in practice, does not require a log and also there is no recovery procedure (that's the point). Uncommitted data is never written to persistent storage and data in memory is never dirty. Requires ability to write all changes made by a transaction to persistent storage in a single atomic action. %TODO data structures
@@ -180,13 +222,12 @@ Rare resp. not used in practice, does not require a log and also there is no rec
 
 \paragraph{Log Record}
 Log sequence number (LSN) for navigation, system change number (SCN) for event timestamps (T start), pointers to other log records of same T, transaction ID and related info (redo: change vectors = after images - describes changes to single block of data, undo: before images).
-%TODO log blocks. more on SCN
 
-\textbf{In Memory:} %TODO
-\textbf{In Storage:} %TODO
 
-%TODO
+\paragraph{Write-Ahead Logging (WAL)}
+Separate persistent sorage for data and log. Log records corresponding to change flushed to storage before dirty pages are flushed to storage. Commit marks the end of a transaction. Used to implement Undo/Redo in S2PL systems and only Redo on SI systems.
 
+%TODO checkpoint and aries
 
 
 
@@ -195,18 +236,31 @@ Log sequence number (LSN) for navigation, system change number (SCN) for event t
 Concurrency control in DBs is implemented using locking (usually with a lock table as seen in a transaction manager).
 
 \paragraph{Compatibility Matrix}
-%TODO lock modes? granularity stuff
+Shared (read) vs. exclusive (write) locks. Items with read lock can have more read locks but no write locks. Write lock can have no more read nor write locks.
 
 \paragraph{Two Phase Locking (2PL)}
+Method to guarantee conflict serializability. First phase - growing: acquire locks, no releases. Second phase - shrinking: release locks, no new locks. At the end (commit / abort) all locks have to be released.
 
 \paragraph{Strict 2PL}
+Write locks held by a transaction are only released after it has either committed or aborted. Enforces strict recoverability (and CS). S2PL is usually the default implementation of DB engines.
 
 \paragraph{Deadlock Detection}
+2PL can have deadlocks. Detect them using a wait-for graph (which T is waiting for another T to release a lock). Cycle in wait-for graph = deadlock. Remove deadlock by removing at least one T part of cycle. Deadlocks can be prevented with conservative 2PL (all locks are acquired before a T begins). Wait-for graphs are not usually used in practice since deadlocks are rare and transactions usually just have timers (if it exceeds, transaction is aborted).
+
+\paragraph{SQL Lock Modes}
+On top of shared and exclusive locks, SQL also supports the following:
+\begin{itemize}
+    \item \textbf{Update Lock:} Same as a shared lock until transaction is ready to update the value, then transforms into exclusive lock.
+    \item \textbf{Intent Lock:} Lock objects higher in hierarchy to prevent operations from other transactions in lower levels.
+    \item \textbf{Schema Lock:} Prevents access to schema or access to objects while schema is updated (drop column / table / etc.).
+    \item \textbf{Key Range Lock:} Locking a range of tuples (prevents phantom reads).
+\end{itemize}
+
+\paragraph{Multiversion Concurrency Control (MVCC)}
+Transactions don't hold locks. They're guaranteed consistent view of the DB state at some point in the past. This is in contrast to S2PL. There is also optimistic CC (OCC) where transactions just do their thing and keep a history of all operations. When committing, check for isolation conflicts and rollback if there is one.
 
 \paragraph{Snapshot Isolation}
-
-
-
+A form of MVCC. Transactions operate on version of DB as it existed at the start of the transaction. T gets start and end (when commit) and only finalized if no other T with overlapping time interval wrote data the other also wrote.
 
 
 
